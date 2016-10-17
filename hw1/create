@@ -1,0 +1,24 @@
+rm -rf a
+rm -rf b
+mkdir a
+mkdir b
+touch a/projects.html
+touch b/projects.log
+touch a/projects.pdf
+mkdir a/xxx
+touch a/xxx/project.tex
+mkdir a/zzz
+mkdir b/zzz
+touch a/zzz/hw1.tex
+touch b/zzz/hw1.tex
+ln -s ./hw1.tex b/zzz/hw2.tex
+
+sleep 120
+
+touch a/projects.log
+touch b/projects.html
+touch a/zzz/hw2.tex
+
+mkdir original
+cp -rp a original
+cp -rp b original
