@@ -19,6 +19,7 @@ void union_dirs( char *dir1, char *dir2, int depth )
 	char *c1,*c2;
 	int flag=0;
 	struct stat *buf1,*buf2;
+	char *sym1,*sym2;
 
 	dirp1 = opendir(dir1);
 	dirp2 = opendir(dir2);
@@ -86,7 +87,17 @@ void union_dirs( char *dir1, char *dir2, int depth )
 					}
 					else if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
-						printf("cp -p %s %s",c2,dir1);
+						if( s2->d_type == DT_REG )
+						{
+							printf("cp -p %s %s",c2,dir1);
+						}
+						else
+						{
+							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+							readlink(c2,sym2, NAME_SIZE);
+							printf("ln -sf %s %s/%s",sym2,dir1,s2->d_name);
+							free(sym2);
+						}
 					}
 					else if( s2->d_type == DT_LNK )
 					{
@@ -109,7 +120,7 @@ void union_dirs( char *dir1, char *dir2, int depth )
 					free(buf2);
 				}
 			}
-			printf("cp -p %s/%s %s",dir1,s1->d_name,dir2);
+			printf("cp -p %s %s",c1,dir2);
 		}
 		else if( s1->d_type == DT_LNK )
 		{
@@ -128,6 +139,10 @@ void union_dirs( char *dir1, char *dir2, int depth )
 					c2 = strcat(c2,"/");
 					c2 = strcat(c2,s2->d_name);
 
+					sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+					readlink(c1,sym1, NAME_SIZE);
+
+
 					buf1 = (struct stat*)malloc( sizeof(struct stat) );
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
 
@@ -137,11 +152,21 @@ void union_dirs( char *dir1, char *dir2, int depth )
 
 					if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
 					{
-						printf("cp -p %s %s",c1,dir2);
+						printf("ln -sf %s %s/%s",sym1,dir2,s1->d_name);
 					}
 					else if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
-						printf("cp -p %s %s",c2,dir1);
+						if( s2->d_type == DT_REG )
+						{
+							printf("cp -p %s %s",c2,dir1);
+						}
+						else
+						{
+							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+							readlink(c2,sym2, NAME_SIZE);
+							printf("ln -sf %s %s/%s",sym1,dir2,s1->d_name);
+							free(sym2);
+						}
 					}
 					else if( s2->d_type == DT_REG )
 					{
@@ -149,11 +174,14 @@ void union_dirs( char *dir1, char *dir2, int depth )
 					}
 					else if( buf1->st_size > buf2->st_size )
 					{
-						printf("cp -p %s %s",c1,dir2);
+						printf("ln -sf %s %s/%s",sym1,dir2,s1->d_name);
 					}
 					else if( buf1->st_size < buf2->st_size )
 					{
-						printf("cp -p %s %s",c2,dir1);
+						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+						readlink(c2,sym2, NAME_SIZE);
+						printf("ln -sf %s %s/%s",sym1,dir2,s1->d_name);
+						free(sym2);
 					}
 					flag=1;
 					break;
