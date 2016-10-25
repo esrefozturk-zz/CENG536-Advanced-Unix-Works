@@ -43,7 +43,6 @@ void union_dirs( char *dir1, char *dir2, int look )
 
 	while( (s1=readdir(dirp1)) )
 	{
-
 		if( !strcmp(s1->d_name,".") || !strcmp(s1->d_name,"..") )
 			continue;
 		dirp2 = opendir(dir2);
@@ -52,6 +51,11 @@ void union_dirs( char *dir1, char *dir2, int look )
 			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
+				if( look )
+				{
+					flag = 1;
+					break;
+				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
 					c1 = concat3( dir1, "/" , s1->d_name );
@@ -242,7 +246,7 @@ void union_dirs( char *dir1, char *dir2, int look )
 
 }
 
-void intersect_dirs( char* dir1, char* dir2)
+void intersect_dirs( char* dir1, char* dir2, int look)
 {
 	DIR *dirp1,*dirp2;
 	struct dirent *s1,*s2;
@@ -265,12 +269,17 @@ void intersect_dirs( char* dir1, char* dir2)
 			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
+				if( look )
+				{
+					flag = 1;
+					break;
+				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
 					c1 = concat3( dir1, "/" , s1->d_name );
 					c2 = concat3( dir2, "/" , s2->d_name );
 
-					intersect_dirs(c1,c2);
+					intersect_dirs(c1,c2,look);
 
 					free(c1);
 					free(c2);
@@ -290,6 +299,11 @@ void intersect_dirs( char* dir1, char* dir2)
 			c1 = concat3( dir1, "/" , s1->d_name );
 			while( (s2=readdir(dirp2)) )
 			{
+				if( look )
+				{
+					flag = 1;
+					break;
+				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
 					c2 = concat3( dir2, "/" , s2->d_name );
@@ -362,6 +376,11 @@ void intersect_dirs( char* dir1, char* dir2)
 			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
+				if( look )
+				{
+					flag = 1;
+					break;
+				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
 					c1 = concat3( dir1, "/" , s1->d_name );
@@ -470,7 +489,8 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		intersect_dirs(dir1,dir2);
+		intersect_dirs(dir1,dir2,0);
+		intersect_dirs(dir1,dir2,1);
 	}
 
 }
