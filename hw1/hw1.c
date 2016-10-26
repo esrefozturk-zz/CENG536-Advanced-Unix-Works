@@ -293,12 +293,10 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
-					c1 = concat3( dir1, "/" , s1->d_name );
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					intersect_dirs(c1,c2,look);
 
-					free(c1);
 					free(c2);
 
 					flag=1;
@@ -312,8 +310,6 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 		}
 		else if( s1->d_type == DT_REG )
 		{
-
-			c1 = concat3( dir1, "/" , s1->d_name );
 			while( (s2=readdir(dirp2)) )
 			{
 				if( look )
@@ -325,15 +321,20 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 				{
 					c2 = concat3( dir2, "/" , s2->d_name );
 
-					buf1 = (struct stat*)malloc( sizeof(struct stat) );
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
 
-					stat(c1,buf1);
 
 					if( s2->d_type == DT_REG )
 						stat(c2,buf2);
 					else
+					{
 						lstat(c2,buf2);
+
+						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+						size2 = readlink(c2,sym2, NAME_SIZE);
+						sym2[size2] = 0;
+
+					}
 
 					if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
@@ -349,20 +350,12 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 						}
 						else
 						{
-							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-							size2 = readlink(c2,sym2, NAME_SIZE);
-							sym2[size2] = 0;
 							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-							free(sym2);
 						}
 					}
 					else if( s2->d_type == DT_LNK )
 					{
-						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-						size2 = readlink(c2,sym2, NAME_SIZE);
-						sym2[size2] = 0;
 						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						free(sym2);
 					}
 					else if( buf1->st_size < buf2->st_size )
 					{
@@ -375,7 +368,8 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 
 
 					free(c2);
-					free(buf1);
+					if( s2->d_type == DT_LNK )
+						free(sym2);
 					free(buf2);
 
 					flag=1;
@@ -386,7 +380,6 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 			{
 				printf("rm %s\n",c1);
 			}
-			free(c1);
 		}
 		else if( s1->d_type == DT_LNK )
 		{
@@ -400,21 +393,27 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
-					c1 = concat3( dir1, "/" , s1->d_name );
+
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
 					size1 = readlink(c1,sym1, NAME_SIZE);
 					sym1[size1] = 0;
-					buf1 = (struct stat*)malloc( sizeof(struct stat) );
+
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
 
-					lstat(c1,buf1);
 
 					if( s2->d_type == DT_REG )
 						stat(c2,buf2);
 					else
+					{
 						lstat(c2,buf2);
+
+						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+						size2 = readlink(c2,sym2, NAME_SIZE);
+						sym2[size2] = 0;
+
+					}
 
 					if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
@@ -431,11 +430,7 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 						}
 						else
 						{
-							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-							size2 = readlink(c2,sym2, NAME_SIZE);
-							sym2[size2] = 0;
 							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-							free(sym2);
 						}
 					}
 					else if( s2->d_type == DT_REG )
@@ -451,16 +446,14 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 					else if( buf1->st_size > buf2->st_size )
 					{
 						printf("rm %s\n",c1);
-						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-						size2 = readlink(c2,sym2, NAME_SIZE);
-						sym2[size2] = 0;
 						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						free(sym2);
 					}
+
 					free(c2);
-					free(buf1);
+					if( s2->d_type == DT_LNK )
+						free(sym2);
 					free(buf2);
-					free(sym1);
+
 
 					flag=1;
 					break;
@@ -470,8 +463,15 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 			{
 				printf("cp -p %s/%s %s\n",dir1,s1->d_name,dir2);
 			}
-			free(c1);
+
 		}
+
+		if( s1->d_type == DT_LNK )
+		{
+			free(sym1);
+		}
+		free(c1);
+		free(buf1);
 
 		closedir(dirp2);
 	}
