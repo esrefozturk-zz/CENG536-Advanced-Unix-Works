@@ -10,14 +10,6 @@
 #define INTERSECT_MODE 1
 #define NAME_SIZE  256
 
-char* concat2(char *ch1, char *ch2)
-{
-	char *result = (char*)malloc( sizeof(char) * ( strlen(ch1) + strlen(ch2) + 2 ) );
-	result = strcpy(result,ch1);
-	result = strcat(result,ch2);
-	return result;
-}
-
 char* concat3(char *ch1, char *ch2, char *ch3)
 {
 	char *result = (char*)malloc( sizeof(char) * ( strlen(ch1) + strlen(ch2) + strlen(ch3) + 2 ) );
@@ -46,9 +38,24 @@ void union_dirs( char *dir1, char *dir2, int look )
 		if( !strcmp(s1->d_name,".") || !strcmp(s1->d_name,"..") )
 			continue;
 		dirp2 = opendir(dir2);
+		c1 = concat3( dir1, "/" , s1->d_name );
+
+		buf1 = (struct stat*)malloc( sizeof(struct stat) );
+
+		if( s1->d_type == DT_REG )
+			stat(c1,buf1);
+		else if( s1->d_type == DT_LNK )
+		{
+			lstat(c1,buf1);
+
+			sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+			size1 = readlink(c1,sym1, NAME_SIZE);
+			sym1[size1] = 0;
+		}
+
+		flag = 0;
 		if( s1->d_type == DT_DIR )
 		{
-			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
 				if( look )
@@ -58,12 +65,10 @@ void union_dirs( char *dir1, char *dir2, int look )
 				}
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
-					c1 = concat3( dir1, "/" , s1->d_name );
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					union_dirs(c1,c2,look);
 
-					free(c1);
 					free(c2);
 
 					flag=1;
@@ -77,8 +82,6 @@ void union_dirs( char *dir1, char *dir2, int look )
 		}
 		else if( s1->d_type == DT_REG )
 		{
-			flag=0;
-			c1 = concat3( dir1, "/" , s1->d_name );
 			while( (s2=readdir(dirp2)) )
 			{
 				if( look )
@@ -90,16 +93,19 @@ void union_dirs( char *dir1, char *dir2, int look )
 				{
 					c2 = concat3( dir2, "/" , s2->d_name );
 
-					buf1 = (struct stat*)malloc( sizeof(struct stat) );
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
-
-					stat(c1,buf1);
 
 					if( s2->d_type == DT_REG )
 						stat(c2,buf2);
 					else
+					{
 						lstat(c2,buf2);
 
+						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+						size2 = readlink(c2,sym2, NAME_SIZE);
+						sym2[size2] = 0;
+
+					}
 					if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
 					{
 						if( s2->d_type == DT_LNK )
@@ -114,11 +120,7 @@ void union_dirs( char *dir1, char *dir2, int look )
 						}
 						else
 						{
-							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-							size2 = readlink(c2,sym2, NAME_SIZE);
-							sym2[size2] = 0;
 							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-							free(sym2);
 						}
 					}
 					else if( s2->d_type == DT_LNK )
@@ -135,9 +137,10 @@ void union_dirs( char *dir1, char *dir2, int look )
 						printf("cp -p %s %s\n",c2,dir1);
 					}
 
-					free(c1);
+
 					free(c2);
-					free(buf1);
+					if( s2->d_type == DT_LNK )
+						free(sym2);
 					free(buf2);
 
 					flag=1;
@@ -151,7 +154,6 @@ void union_dirs( char *dir1, char *dir2, int look )
 		}
 		else if( s1->d_type == DT_LNK )
 		{
-			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
 				if( !strcmp(s1->d_name, s2->d_name) )
@@ -161,16 +163,16 @@ void union_dirs( char *dir1, char *dir2, int look )
 						flag = 1;
 						break;
 					}
-					c1 = concat3( dir1, "/" , s1->d_name );
 					c2 = concat3( dir2, "/" , s2->d_name );
 
-					sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-					size1 = readlink(c1,sym1, NAME_SIZE);
-					sym1[size1] = 0;
-					buf1 = (struct stat*)malloc( sizeof(struct stat) );
+					sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+					size2 = readlink(c2,sym2, NAME_SIZE);
+					sym2[size2] = 0;
+
+
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
 
-					lstat(c1,buf1);
+
 
 					if( s2->d_type == DT_REG )
 						stat(c2,buf2);
@@ -192,11 +194,7 @@ void union_dirs( char *dir1, char *dir2, int look )
 						}
 						else
 						{
-							sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-							size2 = readlink(c2,sym2, NAME_SIZE);
-							sym2[size2] = 0;
 							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-							free(sym2);
 						}
 					}
 					else if( s2->d_type == DT_REG )
@@ -212,18 +210,13 @@ void union_dirs( char *dir1, char *dir2, int look )
 					else if( buf1->st_size < buf2->st_size )
 					{
 						printf("rm %s\n",c1);
-						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-						size2 = readlink(c2,sym2, NAME_SIZE);
-						sym2[size2] = 0;
 						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						free(sym2);
 					}
 
-					free(c1);
+
 					free(c2);
-					free(buf1);
 					free(buf2);
-					free(sym1);
+					free(sym2);
 
 					flag=1;
 					break;
@@ -235,6 +228,13 @@ void union_dirs( char *dir1, char *dir2, int look )
 			}
 
 		}
+
+		if( s1->d_type == DT_LNK )
+		{
+			free(sym1);
+		}
+		free(c1);
+		free(buf1);
 
 		closedir(dirp2);
 	}
@@ -264,9 +264,26 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 		if( !strcmp(s1->d_name,".") || !strcmp(s1->d_name,"..") )
 			continue;
 		dirp2 = opendir(dir2);
+
+		dirp2 = opendir(dir2);
+		c1 = concat3( dir1, "/" , s1->d_name );
+
+		buf1 = (struct stat*)malloc( sizeof(struct stat) );
+
+		if( s1->d_type == DT_REG )
+			stat(c1,buf1);
+		else if( s1->d_type == DT_LNK )
+		{
+			lstat(c1,buf1);
+
+			sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
+			size1 = readlink(c1,sym1, NAME_SIZE);
+			sym1[size1] = 0;
+		}
+
+		flag = 0;
 		if( s1->d_type == DT_DIR )
 		{
-			flag=0;
 			while( (s2=readdir(dirp2)) )
 			{
 				if( look )
@@ -295,7 +312,7 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 		}
 		else if( s1->d_type == DT_REG )
 		{
-			flag=0;
+
 			c1 = concat3( dir1, "/" , s1->d_name );
 			while( (s2=readdir(dirp2)) )
 			{
@@ -373,7 +390,7 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 		}
 		else if( s1->d_type == DT_LNK )
 		{
-			flag=0;
+
 			while( (s2=readdir(dirp2)) )
 			{
 				if( look )
