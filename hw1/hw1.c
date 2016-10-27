@@ -193,7 +193,9 @@ void union_dirs( char *dir1, char *dir2, int look )
 
 }
 
-void intersect_dirs( char* dir1, char* dir2, int look)
+
+
+void intersect_dirs( char *dir1, char *dir2, int look )
 {
 	DIR *dirp1,*dirp2;
 	struct dirent *s1,*s2;
@@ -207,11 +209,8 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 
 	while( (s1=readdir(dirp1)) )
 	{
-
 		if( !strcmp(s1->d_name,".") || !strcmp(s1->d_name,"..") )
 			continue;
-		dirp2 = opendir(dir2);
-
 		dirp2 = opendir(dir2);
 		c1 = concat3( dir1, "/" , s1->d_name );
 
@@ -252,10 +251,10 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 			}
 			if(!flag)
 			{
-				printf("rm -rf %s/%s\n",dir1,s1->d_name);
+				delete_dir(c1);
 			}
 		}
-		else if( s1->d_type == DT_REG )
+		else
 		{
 			while( (s2=readdir(dirp2)) )
 			{
@@ -270,7 +269,6 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
 
-
 					if( s2->d_type == DT_REG )
 						stat(c2,buf2);
 					else
@@ -280,37 +278,31 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
 						size2 = readlink(c2,sym2, NAME_SIZE);
 						sym2[size2] = 0;
-
 					}
 
 					if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
-						if( s2->d_type == DT_LNK )
-							printf("rm %s\n",c2);
-						printf("cp -p %s %s\n",c1,dir2);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
 					}
 					else if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
 					{
-						if( s2->d_type == DT_REG )
-						{
-							printf("cp -p %s %s\n",c2,dir1);
-						}
-						else
-						{
-							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						}
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
-					else if( s2->d_type == DT_LNK )
+					else if( s1->d_type == DT_LNK && s2->d_type == DT_REG )
 					{
-						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
+					}
+					else if( s1->d_type == DT_REG && s2->d_type == DT_LNK )
+					{
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
 					else if( buf1->st_size < buf2->st_size )
 					{
-						printf("cp -p %s %s\n",c1,dir2);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
 					}
 					else if( buf1->st_size > buf2->st_size )
 					{
-						printf("cp -p %s %s\n",c2,dir1);
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
 
 
@@ -325,92 +317,8 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 			}
 			if(!flag)
 			{
-				printf("rm %s\n",c1);
+				delete_file(c1);
 			}
-		}
-		else if( s1->d_type == DT_LNK )
-		{
-
-			while( (s2=readdir(dirp2)) )
-			{
-				if( look )
-				{
-					flag = 1;
-					break;
-				}
-				if( !strcmp(s1->d_name, s2->d_name) )
-				{
-
-					c2 = concat3( dir2, "/" , s2->d_name );
-
-					sym1 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-					size1 = readlink(c1,sym1, NAME_SIZE);
-					sym1[size1] = 0;
-
-					buf2 = (struct stat*)malloc( sizeof(struct stat) );
-
-
-					if( s2->d_type == DT_REG )
-						stat(c2,buf2);
-					else
-					{
-						lstat(c2,buf2);
-
-						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-						size2 = readlink(c2,sym2, NAME_SIZE);
-						sym2[size2] = 0;
-
-					}
-
-					if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
-					{
-						if( s2->d_type == DT_LNK )
-							printf("rm %s\n",c2);
-						printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
-					}
-					else if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
-					{
-						printf("rm %s\n",c1);
-						if( s2->d_type == DT_REG )
-						{
-							printf("cp -p %s %s\n",c2,dir1);
-						}
-						else
-						{
-							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						}
-					}
-					else if( s2->d_type == DT_REG )
-					{
-						printf("rm %s\n",c2);
-						printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
-					}
-					else if( buf1->st_size > buf2->st_size )
-					{
-						printf("rm %s\n",c2);
-						printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
-					}
-					else if( buf1->st_size > buf2->st_size )
-					{
-						printf("rm %s\n",c1);
-						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-					}
-
-					free(c2);
-					if( s2->d_type == DT_LNK )
-						free(sym2);
-					free(buf2);
-
-
-					flag=1;
-					break;
-				}
-			}
-			if(!flag)
-			{
-				printf("cp -p %s/%s %s\n",dir1,s1->d_name,dir2);
-			}
-
 		}
 
 		if( s1->d_type == DT_LNK )
@@ -425,10 +333,8 @@ void intersect_dirs( char* dir1, char* dir2, int look)
 
 	closedir(dirp1);
 
-
-
-
 }
+
 
 int main(int argc, char **argv)
 {
