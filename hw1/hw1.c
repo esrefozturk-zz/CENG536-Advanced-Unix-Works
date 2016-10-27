@@ -8,7 +8,7 @@
 
 #define UNION_MODE 0
 #define INTERSECT_MODE 1
-#define NAME_SIZE  256
+#define NAME_SIZE  10000
 
 char* concat3(char *ch1, char *ch2, char *ch3)
 {
@@ -17,6 +17,38 @@ char* concat3(char *ch1, char *ch2, char *ch3)
 	result = strcat(result,ch2);
 	result = strcat(result,ch3);
 	return result;
+}
+
+void copy_file( char* c1, char* c2, char* dir1, char* dir2, struct dirent* s1, struct dirent* s2, char* sym1 )
+{
+	//printf("------------------------------------------%s--%s\n",c1,c2);
+	if( s2 && s2->d_type == DT_LNK )
+	{
+		printf("rm %s\n",c2);
+	}
+	if( s1 && s1->d_type == DT_LNK )
+	{
+		printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
+	}
+	else
+	{
+		printf("cp -p %s %s\n",c1,dir2);
+	}
+}
+
+void delete_file( char* c )
+{
+	printf("rm %s\n",c);
+}
+
+void copy_dir(char* c1, char* dir2 )
+{
+	printf("cp -rp %s %s\n",c1,dir2);
+}
+
+void delete_dir(char* c)
+{
+	printf("rm -rf %s\n",c);
 }
 
 
@@ -77,10 +109,10 @@ void union_dirs( char *dir1, char *dir2, int look )
 			}
 			if(!flag)
 			{
-				printf("cp -rp %s/%s %s\n",dir1,s1->d_name,dir2);
+				copy_dir(c1,dir2);
 			}
 		}
-		else if( s1->d_type == DT_REG )
+		else
 		{
 			while( (s2=readdir(dirp2)) )
 			{
@@ -104,37 +136,31 @@ void union_dirs( char *dir1, char *dir2, int look )
 						sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
 						size2 = readlink(c2,sym2, NAME_SIZE);
 						sym2[size2] = 0;
-
 					}
+
 					if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
 					{
-						if( s2->d_type == DT_LNK )
-							printf("rm %s\n",c2);
-						printf("cp -p %s %s\n",c1,dir2);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
 					}
 					else if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
 					{
-						if( s2->d_type == DT_REG )
-						{
-							printf("cp -p %s %s\n",c2,dir1);
-						}
-						else
-						{
-							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						}
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
-					else if( s2->d_type == DT_LNK )
+					else if( s1->d_type == DT_REG && s2->d_type == DT_LNK )
 					{
-						printf("rm %s\n",c2);
-						printf("cp -p %s %s\n",c1,dir2);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
+					}
+					else if( s1->d_type == DT_LNK && s2->d_type == DT_REG )
+					{
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
 					else if( buf1->st_size > buf2->st_size )
 					{
-						printf("cp -p %s %s\n",c1,dir2);
+						copy_file(c1,c2,dir1,dir2,s1,s2,sym1);
 					}
 					else if( buf1->st_size < buf2->st_size )
 					{
-						printf("cp -p %s %s\n",c2,dir1);
+						copy_file(c2,c1,dir2,dir1,s2,s1,sym2);
 					}
 
 
@@ -149,84 +175,8 @@ void union_dirs( char *dir1, char *dir2, int look )
 			}
 			if(!flag)
 			{
-				printf("cp -p %s %s\n",c1,dir2);
+				copy_file(c1,NULL,NULL,dir2,NULL,NULL,NULL);
 			}
-		}
-		else if( s1->d_type == DT_LNK )
-		{
-			while( (s2=readdir(dirp2)) )
-			{
-				if( !strcmp(s1->d_name, s2->d_name) )
-				{
-					if( look )
-					{
-						flag = 1;
-						break;
-					}
-					c2 = concat3( dir2, "/" , s2->d_name );
-
-					sym2 = (char*)malloc( (NAME_SIZE+1)*sizeof(char) );
-					size2 = readlink(c2,sym2, NAME_SIZE);
-					sym2[size2] = 0;
-
-
-					buf2 = (struct stat*)malloc( sizeof(struct stat) );
-
-
-
-					if( s2->d_type == DT_REG )
-						stat(c2,buf2);
-					else
-						lstat(c2,buf2);
-
-					if( buf1->st_mtim.tv_sec > buf2->st_mtim.tv_sec )
-					{
-						if( s2->d_type == DT_LNK )
-							printf("rm %s\n",c2);
-						printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
-					}
-					else if( buf1->st_mtim.tv_sec < buf2->st_mtim.tv_sec )
-					{
-						printf("rm %s\n",c1);
-						if( s2->d_type == DT_REG )
-						{
-							printf("cp -p %s %s\n",c2,dir1);
-						}
-						else
-						{
-							printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-						}
-					}
-					else if( s2->d_type == DT_REG )
-					{
-						printf("rm %s\n",c1);
-						printf("cp -p %s %s\n",c2,dir1);
-					}
-					else if( buf1->st_size > buf2->st_size )
-					{
-						printf("rm %s\n",c2);
-						printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
-					}
-					else if( buf1->st_size < buf2->st_size )
-					{
-						printf("rm %s\n",c1);
-						printf("ln -sf %s %s/%s\n",sym2,dir1,s2->d_name);
-					}
-
-
-					free(c2);
-					free(buf2);
-					free(sym2);
-
-					flag=1;
-					break;
-				}
-			}
-			if(!flag)
-			{
-				printf("cp -p %s/%s %s\n",dir1,s1->d_name,dir2);
-			}
-
 		}
 
 		if( s1->d_type == DT_LNK )
@@ -240,9 +190,6 @@ void union_dirs( char *dir1, char *dir2, int look )
 	}
 
 	closedir(dirp1);
-
-
-
 
 }
 
