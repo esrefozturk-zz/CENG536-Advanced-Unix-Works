@@ -22,16 +22,17 @@ char* concat3(char *ch1, char *ch2, char *ch3)
 void copy_file( char* c1, char* c2, char* dir1, char* dir2, struct dirent* s1, struct dirent* s2, char* sym1 )
 {
 	//printf("------------------------------------------%s--%s\n",c1,c2);
-	if( s2 && s2->d_type == DT_LNK )
-	{
-		printf("rm %s\n",c2);
-	}
+
 	if( s1 && s1->d_type == DT_LNK )
 	{
 		printf("ln -sf %s %s/%s\n",sym1,dir2,s1->d_name);
 	}
 	else
 	{
+		if( s2 && s2->d_type == DT_LNK )
+		{
+			printf("rm %s\n",c2);
+		}
 		printf("cp -p %s %s\n",c1,dir2);
 	}
 }
@@ -90,13 +91,14 @@ void union_dirs( char *dir1, char *dir2, int look )
 		{
 			while( (s2=readdir(dirp2)) )
 			{
-				if( look )
-				{
-					flag = 1;
-					break;
-				}
+
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
+					if( look )
+					{
+						flag = 1;
+						break;
+					}
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					union_dirs(c1,c2,look);
@@ -116,13 +118,14 @@ void union_dirs( char *dir1, char *dir2, int look )
 		{
 			while( (s2=readdir(dirp2)) )
 			{
-				if( look )
-				{
-					flag = 1;
-					break;
-				}
+
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
+					if( look )
+					{
+						flag = 1;
+						break;
+					}
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
@@ -175,7 +178,7 @@ void union_dirs( char *dir1, char *dir2, int look )
 			}
 			if(!flag)
 			{
-				copy_file(c1,NULL,NULL,dir2,NULL,NULL,NULL);
+				copy_file(c1,NULL,NULL,dir2,s1,NULL,sym1);
 			}
 		}
 
@@ -232,13 +235,14 @@ void intersect_dirs( char *dir1, char *dir2, int look )
 		{
 			while( (s2=readdir(dirp2)) )
 			{
-				if( look )
-				{
-					flag = 1;
-					break;
-				}
+
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
+					if( look )
+					{
+						flag = 1;
+						break;
+					}
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					intersect_dirs(c1,c2,look);
@@ -258,13 +262,14 @@ void intersect_dirs( char *dir1, char *dir2, int look )
 		{
 			while( (s2=readdir(dirp2)) )
 			{
-				if( look )
-				{
-					flag = 1;
-					break;
-				}
+
 				if( !strcmp(s1->d_name, s2->d_name) )
 				{
+					if( look )
+					{
+						flag = 1;
+						break;
+					}
 					c2 = concat3( dir2, "/" , s2->d_name );
 
 					buf2 = (struct stat*)malloc( sizeof(struct stat) );
@@ -360,7 +365,7 @@ int main(int argc, char **argv)
 	else
 	{
 		intersect_dirs(dir1,dir2,0);
-		intersect_dirs(dir1,dir2,1);
+		intersect_dirs(dir2,dir1,1);
 	}
 
 }
