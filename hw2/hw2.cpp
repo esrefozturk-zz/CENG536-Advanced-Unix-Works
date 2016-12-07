@@ -40,6 +40,7 @@ pthread_mutex_t locks_lock;
 
 typedef struct mystruct1
 {
+  pid_t pid;
   int id;
   double xoff,yoff,width,height;
   char type ;
@@ -167,7 +168,7 @@ void create_mutexes_and_conds()
 
 }
 
-void agent(int client)
+void agent(int client, pid_t pid)
 {
   string command;
   int xoff;
@@ -176,6 +177,7 @@ void agent(int client)
   int height;
   int lock_id=1;
   int blocked_id=1;
+  int id;
 
 
   while((read_count=read(client, buf, 1024)))
@@ -188,8 +190,68 @@ void agent(int client)
     {
       iss >> xoff >> yoff >> width >> height;
 
-      
+      pthread_mutex_lock(locks_mutex);
+      for(int i=0;i<100000;i++)
+      {
+        if(locks_mem[i].id && locks_mem[i].type=='W')
+        {
+          i=0;
+          pthread_cond_wait(locks_read,locks_mutex);
+        }
+      }
+      for(int i=0;i<100000;i++)
+      {
+        if( !(locks_mem[i].id) )
+        {
+          locks_mem[i].id = lock_id++;
+          locks_mem[i].pid = pid;
+          locks_mem[i].type = 'R';
+          break;
+        }
+      }
+      pthread_mutex_unlock(locks_mutex);
+      write(client,"slm",3);
+    }
+    else if( command == "LOCKW" )
+    {
+      iss >> xoff >> yoff >> width >> height;
 
+      pthread_mutex_lock(locks_mutex);
+      for(int i=0;i<100000;i++)
+      {
+        if(locks_mem[i].id)
+        {
+          i=0;
+          pthread_cond_wait(locks_read,locks_mutex);
+        }
+      }
+      for(int i=0;i<100000;i++)
+      {
+        if( !(locks_mem[i].id) )
+        {
+          locks_mem[i].id = lock_id++;
+          locks_mem[i].pid = pid;
+          locks_mem[i].type = 'W';
+          break;
+        }
+      }
+      pthread_mutex_unlock(locks_mutex);
+      write(client,"slm",3);
+    }
+    else if( command == "UNLOCK" )
+    {
+      iss >> id;
+
+      pthread_mutex_lock(locks_mutex);
+      for(int i=0;i<100000;i++)
+      {
+        if(locks_mem[i].id == id && locks_mem[i].pid == pid)
+        {
+          locks_mem[i].id = 0;
+          pthread_cond_broadcast(locks_read);
+        }
+      }
+      pthread_mutex_unlock(locks_mutex);
     }
     else if(command == "BYE")
     {
@@ -203,6 +265,8 @@ void agent(int client)
 
 int main(int argc, char **argv)
 {
+  pid_t pid;
+
   if(argc<2)
   {
     printf("GIVE ME SOCKET!\n");
@@ -212,9 +276,9 @@ int main(int argc, char **argv)
   create_socket(argv[1]);
   create_mutexes_and_conds();
 
-  while((client = accept(sock, 0, 0)) ) if(!fork())
+  while((client = accept(sock, 0, 0)) ) if(!(pid=fork()))
   {
-    agent(client);
+    agent(client,pid);
   }
 
   while(wait(&wait_status)>0);
