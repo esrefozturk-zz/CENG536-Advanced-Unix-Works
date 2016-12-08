@@ -207,24 +207,27 @@ void wait_blocked(int xoff,int yoff,int width,int height, char type,pid_t pid)
       pthread_mutex_unlock(locks_mutex);
       pthread_cond_wait(&(blockeds_mem[i].cond),&(blockeds_mem[i].mutex));
       blockeds_mem[i].id = blocked_id = 0;
-      pthread_mutex_lock(locks_mutex);
       pthread_mutex_unlock(&(blockeds_mem[i].mutex));
       return;
     }
   }
 }
 
+
 int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid)
 {
+  cout << "lock_it: " << pid << endl;
   pthread_mutex_lock(locks_mutex);
+  cout << "mutex_got" <<  pid  << endl;
   for(int i=0;i<100000;i++)
   {
-    if(locks_mem[i].id && type == 'R' && locks_mem[i].type=='W' && intersects(locks_mem[i],xoff,yoff,width,height) )
+    if(locks_mem[i].id && (type == 'W' || locks_mem[i].type=='W' )&& intersects(locks_mem[i],xoff,yoff,width,height) )
     {
       wait_blocked(xoff,yoff,width,height,type,pid);
       return lock_it(xoff,yoff,width,height,type,pid);
     }
   }
+  cout << "will_be_locked_it: " << pid << endl;
   for(int i=0;i<100000;i++)
   {
     if( !(locks_mem[i].id) )
@@ -239,10 +242,39 @@ int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid)
       break;
     }
   }
+  cout << "locked_it: " << pid << endl;
   pthread_mutex_unlock(locks_mutex);
   return lock_id-1;
 }
 
+bool unlock_it(int id,pid_t pid)
+{
+  pthread_mutex_lock(locks_mutex);
+  for(int i=0;i<100000;i++)
+  {
+    if( locks_mem[i].id == id && locks_mem[i].pid == pid )
+    {
+      locks_mem[i].id = 0;
+
+      for(int j=0;j<100000;j++)
+      {
+        if( !(blockeds_mem[j].id))
+          continue;
+        pthread_mutex_lock(&(blockeds_mem[j].mutex));
+        if( intersects(locks_mem[i],blockeds_mem[j].xoff,blockeds_mem[j].yoff,blockeds_mem[j].width,blockeds_mem[j].height ) )
+        {
+          pthread_mutex_unlock(locks_mutex);
+          pthread_cond_signal(&(blockeds_mem[j].cond));
+          pthread_mutex_unlock(&(blockeds_mem[j].mutex));
+          return true;
+        }
+        pthread_mutex_unlock(&(blockeds_mem[j].mutex));
+      }
+    }
+  }
+  pthread_mutex_unlock(locks_mutex);
+  return false;
+}
 
 void agent(int client, pid_t pid)
 {
@@ -281,17 +313,17 @@ void agent(int client, pid_t pid)
     else if( command == "UNLOCK" )
     {
       iss >> id;
-
-      pthread_mutex_lock(locks_mutex);
-      for(int i=0;i<100000;i++)
+      string resp;
+      if(unlock_it(id,pid))
       {
-        if(locks_mem[i].id == id && locks_mem[i].pid == pid)
-        {
-          locks_mem[i].id = 0;
-          pthread_cond_broadcast(locks_read);
-        }
+        resp = "Ok";
       }
-      pthread_mutex_unlock(locks_mutex);
+      else
+      {
+        resp = "Failed";
+      }
+      write(client,resp.c_str(),resp.size());
+
     }
     else if(command == "BYE")
     {
@@ -316,9 +348,9 @@ int main(int argc, char **argv)
   create_socket(argv[1]);
   create_mutexes_and_conds();
 
-  while((client = accept(sock, 0, 0)) ) if(!(pid=fork()))
+  while((client = accept(sock, 0, 0)) ) if((pid=fork()))
   {
-    cout << "aq" << endl;
+    cout << pid << endl;
     agent(client,pid);
   }
 
