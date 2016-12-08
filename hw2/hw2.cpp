@@ -214,7 +214,7 @@ void wait_blocked(int xoff,int yoff,int width,int height, char type,pid_t pid)
 }
 
 
-int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid)
+int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid, bool try_lock)
 {
   cout << "lock_it: " << pid << endl;
   pthread_mutex_lock(locks_mutex);
@@ -223,8 +223,16 @@ int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid)
   {
     if(locks_mem[i].id && (type == 'W' || locks_mem[i].type=='W' )&& intersects(locks_mem[i],xoff,yoff,width,height) )
     {
-      wait_blocked(xoff,yoff,width,height,type,pid);
-      return lock_it(xoff,yoff,width,height,type,pid);
+      if( try_lock )
+      {
+        wait_blocked(xoff,yoff,width,height,type,pid);
+        return lock_it(xoff,yoff,width,height,type,pid,try_lock);
+      }
+      else
+      {
+        return -1;
+      }
+
     }
   }
   cout << "will_be_locked_it: " << pid << endl;
@@ -276,6 +284,37 @@ bool unlock_it(int id,pid_t pid)
   return false;
 }
 
+void mylocks(int client, pid_t pid)
+{
+  pthread_mutex_lock(locks_mutex);
+  for(int i=0;i<100000;i++)
+  {
+    if( locks_mem[i].pid == pid )
+    {
+      ostringstream temp;
+      temp  << locks_mem[i].id << " " << locks_mem[i].type << " " << locks_mem[i].xoff << " " << locks_mem[i].yoff << " "
+            <<locks_mem[i].width << " " << locks_mem[i].height;
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+    }
+  }
+  pthread_mutex_unlock(locks_mutex);
+}
+void getlocks(int client, int xoff, int yoff, int width, int height)
+{
+  pthread_mutex_lock(locks_mutex);
+  for(int i=0;i<100000;i++)
+  {
+    if( locks_mem[i].id && intersects(locks_mem[i],xoff,yoff,width,height) )
+    {
+      ostringstream temp;
+      temp  << locks_mem[i].type << " " << locks_mem[i].xoff << " " << locks_mem[i].yoff << " "
+            <<locks_mem[i].width << " " << locks_mem[i].height;
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+    }
+  }
+  pthread_mutex_unlock(locks_mutex);
+}
+
 void agent(int client, pid_t pid)
 {
   string command;
@@ -299,7 +338,7 @@ void agent(int client, pid_t pid)
       iss >> xoff >> yoff >> width >> height;
 
       ostringstream temp;
-      temp << lock_it(xoff,yoff,width,height,'R',pid);
+      temp << lock_it(xoff,yoff,width,height,'R',pid,false);
       write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
     }
     else if( command == "LOCKW" )
@@ -307,7 +346,7 @@ void agent(int client, pid_t pid)
       iss >> xoff >> yoff >> width >> height;
 
       ostringstream temp;
-      temp << lock_it(xoff,yoff,width,height,'W',pid);
+      temp << lock_it(xoff,yoff,width,height,'W',pid,false);
       write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
     }
     else if( command == "UNLOCK" )
@@ -322,11 +361,53 @@ void agent(int client, pid_t pid)
       {
         resp = "Failed";
       }
-      write(client,resp.c_str(),resp.size());
+      write(client,(resp+'\n').c_str(),(resp+'\n').size());
 
+    }
+    else if( command == "TRYLOCKR" )
+    {
+      iss >> xoff >> yoff >> width >> height;
+
+      ostringstream temp;
+      int esrefesref = lock_it(xoff,yoff,width,height,'R',pid,true);
+      if(esrefesref>0)
+      {
+        temp << esrefesref;
+      }
+      else
+      {
+        temp << "Failed";
+      }
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+    }
+    else if( command == "TRYLOCKW" )
+    {
+      iss >> xoff >> yoff >> width >> height;
+
+      ostringstream temp;
+      int esrefesref = lock_it(xoff,yoff,width,height,'W',pid,true);
+      if(esrefesref>0)
+      {
+        temp << esrefesref;
+      }
+      else
+      {
+        temp << "Failed";
+      }
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+    }
+    else if( command == "MYLOCKS" )
+    {
+      mylocks(client,pid);
+    }
+    else if( command == "GETLOCKS" )
+    {
+      iss >> xoff >> yoff >> width >> height;
+      getlocks(client,xoff,yoff,width,height);
     }
     else if(command == "BYE")
     {
+
       close(client);
       exit(0);
     }
