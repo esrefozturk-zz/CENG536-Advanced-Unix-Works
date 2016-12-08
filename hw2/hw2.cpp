@@ -223,13 +223,14 @@ int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid, bool tr
   {
     if(locks_mem[i].id && (type == 'W' || locks_mem[i].type=='W' )&& intersects(locks_mem[i],xoff,yoff,width,height) )
     {
-      if( try_lock )
+      if(!try_lock )
       {
         wait_blocked(xoff,yoff,width,height,type,pid);
         return lock_it(xoff,yoff,width,height,type,pid,try_lock);
       }
       else
       {
+        pthread_mutex_unlock(locks_mutex);
         return -1;
       }
 
@@ -284,7 +285,7 @@ bool unlock_it(int id,pid_t pid)
   return false;
 }
 
-void mylocks(int client, pid_t pid)
+void mylocks(pid_t pid)
 {
   pthread_mutex_lock(locks_mutex);
   for(int i=0;i<100000;i++)
@@ -299,7 +300,7 @@ void mylocks(int client, pid_t pid)
   }
   pthread_mutex_unlock(locks_mutex);
 }
-void getlocks(int client, int xoff, int yoff, int width, int height)
+void getlocks(int xoff, int yoff, int width, int height)
 {
   pthread_mutex_lock(locks_mutex);
   for(int i=0;i<100000;i++)
@@ -315,7 +316,9 @@ void getlocks(int client, int xoff, int yoff, int width, int height)
   pthread_mutex_unlock(locks_mutex);
 }
 
-void agent(int client, pid_t pid)
+
+
+void agent( pid_t pid)
 {
   string command;
   int xoff;
@@ -398,12 +401,12 @@ void agent(int client, pid_t pid)
     }
     else if( command == "MYLOCKS" )
     {
-      mylocks(client,pid);
+      mylocks(pid);
     }
     else if( command == "GETLOCKS" )
     {
       iss >> xoff >> yoff >> width >> height;
-      getlocks(client,xoff,yoff,width,height);
+      getlocks(xoff,yoff,width,height);
     }
     else if(command == "BYE")
     {
@@ -432,7 +435,7 @@ int main(int argc, char **argv)
   while((client = accept(sock, 0, 0)) ) if((pid=fork()))
   {
     cout << pid << endl;
-    agent(client,pid);
+    agent(pid);
   }
 
 //  while(wait(&wait_status)>0);
