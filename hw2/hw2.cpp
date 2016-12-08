@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <pthread.h>
 
-
 using namespace std;
 
 string locks_shared_name("locks_shared");
@@ -33,7 +32,8 @@ int wait_status;
 char buf[1024];
 int read_count;
 
-
+int lock_id=1;
+int blocked_id=1;
 
 pthread_mutex_t locks_lock;
 
@@ -48,8 +48,11 @@ typedef struct mystruct1
 
 typedef struct mystruct2
 {
+  pid_t pid;
   int id;
   double xoff,yoff,width,height;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
 } blocked;
 
 lock *locks_mem;
@@ -93,6 +96,7 @@ void create_shared_memorys()
   key_blockeds = ftok(blockeds_shared_name.c_str(), key_blockeds);
   key_mutexes = ftok(mutexes_shared_name.c_str(), key_mutexes);
   key_conds = ftok(conds_shared_name.c_str(), key_conds);
+
 
 
   locks_id= shmget(key_locks, sizeof(lock)*100000, 0777 | IPC_CREAT);
@@ -168,6 +172,78 @@ void create_mutexes_and_conds()
 
 }
 
+bool intersects(lock l, int xoff,int yoff,int width,int height)
+{
+  return !(   (l.xoff+width<xoff)
+          &&  (xoff+width<l.xoff)
+          &&  (l.yoff+height<yoff)
+          &&  (yoff+height<l.yoff));
+}
+
+void wait_blocked(int xoff,int yoff,int width,int height, char type,pid_t pid)
+{
+  for(int i=0;i<100000;i++)
+  {
+    if( !(blockeds_mem[i].id) )
+    {
+      pthread_mutexattr_t mutex_attr;
+      pthread_condattr_t cond_attr;
+
+      pthread_mutexattr_init(&mutex_attr);
+      pthread_mutexattr_setpshared(&mutex_attr,PTHREAD_PROCESS_SHARED);
+      pthread_mutex_init(&(blockeds_mem[i].mutex), &mutex_attr);
+
+      pthread_condattr_init(&cond_attr);
+      pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
+      pthread_cond_init(&(blockeds_mem[i].cond), &cond_attr);
+
+      blockeds_mem[i].id = blocked_id++;
+      blockeds_mem[i].xoff = xoff;
+      blockeds_mem[i].yoff = yoff;
+      blockeds_mem[i].width = width;
+      blockeds_mem[i].height = height;
+
+      pthread_mutex_lock(&(blockeds_mem[i].mutex));
+      pthread_mutex_unlock(locks_mutex);
+      pthread_cond_wait(&(blockeds_mem[i].cond),&(blockeds_mem[i].mutex));
+      blockeds_mem[i].id = blocked_id = 0;
+      pthread_mutex_lock(locks_mutex);
+      pthread_mutex_unlock(&(blockeds_mem[i].mutex));
+      return;
+    }
+  }
+}
+
+int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid)
+{
+  pthread_mutex_lock(locks_mutex);
+  for(int i=0;i<100000;i++)
+  {
+    if(locks_mem[i].id && type == 'R' && locks_mem[i].type=='W' && intersects(locks_mem[i],xoff,yoff,width,height) )
+    {
+      wait_blocked(xoff,yoff,width,height,type,pid);
+      return lock_it(xoff,yoff,width,height,type,pid);
+    }
+  }
+  for(int i=0;i<100000;i++)
+  {
+    if( !(locks_mem[i].id) )
+    {
+      locks_mem[i].id = lock_id++;
+      locks_mem[i].pid = pid;
+      locks_mem[i].type = type;
+      locks_mem[i].xoff = xoff;
+      locks_mem[i].yoff = yoff;
+      locks_mem[i].width = width;
+      locks_mem[i].height = height;
+      break;
+    }
+  }
+  pthread_mutex_unlock(locks_mutex);
+  return lock_id-1;
+}
+
+
 void agent(int client, pid_t pid)
 {
   string command;
@@ -175,9 +251,9 @@ void agent(int client, pid_t pid)
   int yoff;
   int width;
   int height;
-  int lock_id=1;
-  int blocked_id=1;
+
   int id;
+
 
 
   while((read_count=read(client, buf, 1024)))
@@ -190,53 +266,17 @@ void agent(int client, pid_t pid)
     {
       iss >> xoff >> yoff >> width >> height;
 
-      pthread_mutex_lock(locks_mutex);
-      for(int i=0;i<100000;i++)
-      {
-        if(locks_mem[i].id && locks_mem[i].type=='W')
-        {
-          i=0;
-          pthread_cond_wait(locks_read,locks_mutex);
-        }
-      }
-      for(int i=0;i<100000;i++)
-      {
-        if( !(locks_mem[i].id) )
-        {
-          locks_mem[i].id = lock_id++;
-          locks_mem[i].pid = pid;
-          locks_mem[i].type = 'R';
-          break;
-        }
-      }
-      pthread_mutex_unlock(locks_mutex);
-      write(client,"slm",3);
+      ostringstream temp;
+      temp << lock_it(xoff,yoff,width,height,'R',pid);
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
     }
     else if( command == "LOCKW" )
     {
       iss >> xoff >> yoff >> width >> height;
 
-      pthread_mutex_lock(locks_mutex);
-      for(int i=0;i<100000;i++)
-      {
-        if(locks_mem[i].id)
-        {
-          i=0;
-          pthread_cond_wait(locks_read,locks_mutex);
-        }
-      }
-      for(int i=0;i<100000;i++)
-      {
-        if( !(locks_mem[i].id) )
-        {
-          locks_mem[i].id = lock_id++;
-          locks_mem[i].pid = pid;
-          locks_mem[i].type = 'W';
-          break;
-        }
-      }
-      pthread_mutex_unlock(locks_mutex);
-      write(client,"slm",3);
+      ostringstream temp;
+      temp << lock_it(xoff,yoff,width,height,'W',pid);
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
     }
     else if( command == "UNLOCK" )
     {
@@ -278,10 +318,11 @@ int main(int argc, char **argv)
 
   while((client = accept(sock, 0, 0)) ) if(!(pid=fork()))
   {
+    cout << "aq" << endl;
     agent(client,pid);
   }
 
-  while(wait(&wait_status)>0);
+//  while(wait(&wait_status)>0);
   return 0;
 
 }
