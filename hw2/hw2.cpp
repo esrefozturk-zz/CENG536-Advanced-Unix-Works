@@ -18,6 +18,7 @@ string locks_shared_name("locks_shared");
 string blockeds_shared_name("blockeds_shared");
 string mutexes_shared_name("mutexes_shared");
 string conds_shared_name("conds_shared");
+string watches_shared_name("watches_shared");
 
 
 
@@ -25,6 +26,7 @@ key_t key_locks=1;
 key_t key_blockeds=2;
 key_t key_mutexes=3;
 key_t key_conds=4;
+key_t key_watches=5;
 
 int sock;
 int client;
@@ -55,8 +57,18 @@ typedef struct mystruct2
   pthread_cond_t cond;
 } blocked;
 
+typedef struct mystruct3
+{
+  pid_t pid;
+  int id;
+
+
+} watch;
+
 lock *locks_mem;
 blocked *blockeds_mem;
+watch *watches_mem;
+
 pthread_mutex_t *mutexes_mem;
 pthread_cond_t *conds_mem;
 
@@ -172,7 +184,7 @@ void create_mutexes_and_conds()
 
 }
 
-bool intersects(lock l, int xoff,int yoff,int width,int height)
+bool intersects(lock l, double xoff,double yoff,double width,double height)
 {
   return !(   (l.xoff+width<xoff)
           &&  (xoff+width<l.xoff)
@@ -180,7 +192,7 @@ bool intersects(lock l, int xoff,int yoff,int width,int height)
           &&  (yoff+height<l.yoff));
 }
 
-void wait_blocked(int xoff,int yoff,int width,int height, char type,pid_t pid)
+void wait_blocked(double xoff,double yoff,double width,double height, char type,pid_t pid)
 {
   for(int i=0;i<100000;i++)
   {
@@ -214,7 +226,7 @@ void wait_blocked(int xoff,int yoff,int width,int height, char type,pid_t pid)
 }
 
 
-int lock_it(int xoff,int yoff,int width,int height, char type,pid_t pid, bool try_lock)
+int lock_it(double xoff,double yoff,double width,double height, char type,pid_t pid, bool try_lock)
 {
   cout << "lock_it: " << pid << endl;
   pthread_mutex_lock(locks_mutex);
@@ -300,7 +312,7 @@ void mylocks(pid_t pid)
   }
   pthread_mutex_unlock(locks_mutex);
 }
-void getlocks(int xoff, int yoff, int width, int height)
+void getlocks(double xoff, double yoff, double width, double height)
 {
   pthread_mutex_lock(locks_mutex);
   for(int i=0;i<100000;i++)
@@ -316,15 +328,19 @@ void getlocks(int xoff, int yoff, int width, int height)
   pthread_mutex_unlock(locks_mutex);
 }
 
+void *watch_thread(void *params)
+{
+
+}
 
 
 void agent( pid_t pid)
 {
   string command;
-  int xoff;
-  int yoff;
-  int width;
-  int height;
+  double xoff;
+  double yoff;
+  double width;
+  double height;
 
   int id;
 
