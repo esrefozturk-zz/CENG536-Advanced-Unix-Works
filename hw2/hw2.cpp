@@ -68,6 +68,7 @@ typedef struct mystruct3
   pthread_cond_t cond;
   char type;
   double e_xoff,e_yoff,e_width,e_height;
+  char e_type;
 
 } watch;
 
@@ -276,11 +277,36 @@ int lock_it(double xoff,double yoff,double width,double height, char type,pid_t 
       locks_mem[i].yoff = yoff;
       locks_mem[i].width = width;
       locks_mem[i].height = height;
+      /*for(int j=0;j<100000;j++)
+      {
+        pthread_mutex_lock(&(watches_mem[j].mutex));
+        if( intersects( locks_mem[i], watches_mem[j].xoff,watches_mem[j].yoff,watches_mem[j].width,watches_mem[j].height ) )
+        {
+
+          if(watches_mem[j].id  )
+          {
+            cout << "-----> "<< watches_mem[j].id << " " << watches_mem[j].xoff << " " << watches_mem[j].width << endl;
+          }
+
+          watches_mem[j].type = 'L';
+          watches_mem[j].e_xoff = locks_mem[i].xoff;
+          watches_mem[j].e_yoff = locks_mem[i].yoff;
+          watches_mem[j].e_width = locks_mem[i].width;
+          watches_mem[j].e_height = locks_mem[i].height;
+          watches_mem[j].e_type = type;
+          pthread_cond_signal(&(watches_mem[j].cond));
+
+        }
+        pthread_mutex_unlock(&(watches_mem[j].mutex));
+
+      }
+      */
       break;
     }
   }
   cout << "locked_it: " << pid << endl;
   pthread_mutex_unlock(locks_mutex);
+
   return lock_id-1;
 }
 
@@ -291,6 +317,7 @@ bool unlock_it(int id,pid_t pid)
   {
     if( locks_mem[i].id == id && locks_mem[i].pid == pid )
     {
+      cout << i << " " << pid <<  endl;
       locks_mem[i].id = 0;
 
       for(int j=0;j<100000;j++)
@@ -303,10 +330,12 @@ bool unlock_it(int id,pid_t pid)
           pthread_mutex_unlock(locks_mutex);
           pthread_cond_signal(&(blockeds_mem[j].cond));
           pthread_mutex_unlock(&(blockeds_mem[j].mutex));
-          return true;
+
+
         }
         pthread_mutex_unlock(&(blockeds_mem[j].mutex));
       }
+      return true;
     }
   }
   pthread_mutex_unlock(locks_mutex);
@@ -352,7 +381,7 @@ void *watch_thread(void *params)
   while(1)
   {
     pthread_cond_wait(&(watches_mem[my_watch_id].cond),&(watches_mem[my_watch_id].mutex));
-
+    cout << "slm nbr" << endl;
     if( watches_mem[my_watch_id].type == 'D' )
     {
       watches_mem[my_watch_id].id = 0;
@@ -362,7 +391,7 @@ void *watch_thread(void *params)
     {
       ostringstream temp;
       temp  << "Watch " << watches_mem[my_watch_id].id << " " << watches_mem[my_watch_id].e_xoff << " " << watches_mem[my_watch_id].e_yoff << " "
-            << watches_mem[my_watch_id].e_width << " " << watches_mem[my_watch_id].e_height <<  " ";
+            << watches_mem[my_watch_id].e_width << " " << watches_mem[my_watch_id].e_height <<  " " << watches_mem[my_watch_id].e_type << " ";
       if( watches_mem[my_watch_id].type == 'L' )
         temp << "locked";
       else
