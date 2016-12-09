@@ -36,6 +36,7 @@ int read_count;
 
 int lock_id=1;
 int blocked_id=1;
+int watch_id=1;
 
 pthread_mutex_t locks_lock;
 
@@ -60,8 +61,13 @@ typedef struct mystruct2
 typedef struct mystruct3
 {
   pid_t pid;
+  int index;
   int id;
-
+  double xoff,yoff,width,height;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+  char type;
+  double e_xoff,e_yoff,e_width,e_height;
 
 } watch;
 
@@ -89,6 +95,7 @@ void create_shared_memorys()
   int blockeds_id;
   int mutexes_id;
   int conds_id;
+  int watches_id;
 
 
 
@@ -102,13 +109,16 @@ void create_shared_memorys()
   fclose(f);
   f = fopen(conds_shared_name.c_str(),"w");
   fclose(f);
+  f = fopen(watches_shared_name.c_str(),"w");
+  fclose(f);
+
 
 
   key_locks = ftok(locks_shared_name.c_str(), key_locks);
   key_blockeds = ftok(blockeds_shared_name.c_str(), key_blockeds);
   key_mutexes = ftok(mutexes_shared_name.c_str(), key_mutexes);
   key_conds = ftok(conds_shared_name.c_str(), key_conds);
-
+  key_watches = ftok(watches_shared_name.c_str(), key_watches);
 
 
   locks_id= shmget(key_locks, sizeof(lock)*100000, 0777 | IPC_CREAT);
@@ -126,6 +136,11 @@ void create_shared_memorys()
   conds_id= shmget(key_conds, sizeof(pthread_cond_t)*100000, 0777 | IPC_CREAT);
   conds_mem = (pthread_cond_t*)shmat(conds_id,NULL,0);
   memset(conds_mem,0,sizeof(pthread_cond_t)*100000);
+
+  watches_id = shmget(key_watches, sizeof(watch)*100000, 0777 | IPC_CREAT);
+  watches_mem = (watch*)shmat(watches_id,NULL,0);
+  memset(watches_mem,0,sizeof(watch)*100000);
+
 }
 
 void create_socket(char *path)
@@ -181,6 +196,7 @@ void create_mutexes_and_conds()
   pthread_condattr_init(&blockeds_write_attr);
   pthread_condattr_setpshared(&blockeds_write_attr, PTHREAD_PROCESS_SHARED);
   pthread_cond_init(blockeds_write, &blockeds_write_attr);
+
 
 }
 
@@ -330,7 +346,74 @@ void getlocks(double xoff, double yoff, double width, double height)
 
 void *watch_thread(void *params)
 {
+  int my_watch_id;
+  my_watch_id = *((int *)params);
+  pthread_mutex_lock(&(watches_mem[my_watch_id].mutex));
+  while(1)
+  {
+    pthread_cond_wait(&(watches_mem[my_watch_id].cond),&(watches_mem[my_watch_id].mutex));
 
+    if( watches_mem[my_watch_id].type != 'F' )
+    {
+      ostringstream temp;
+      temp  << "Watch " << watches_mem[my_watch_id].id << " " << watches_mem[my_watch_id].e_xoff << " " << watches_mem[my_watch_id].e_yoff << " "
+            << watches_mem[my_watch_id].e_width << " " << watches_mem[my_watch_id].e_height <<  " ";
+      if( watches_mem[my_watch_id].type == 'L' )
+        temp << "locked";
+      else
+        temp << "unlocked";
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+      watches_mem[my_watch_id].type = 'F';
+    }
+    else if( watches_mem[my_watch_id].type != 'D' )
+    {
+      watches_mem[my_watch_id].id = 0;
+      break;
+    }
+  }
+  pthread_mutex_unlock(&(watches_mem[my_watch_id].mutex));
+  return NULL;
+}
+
+int create_watch_thread(pid_t pid, double xoff, double yoff, double width, double height)
+{
+  pthread_t tid;
+
+  for(int i=0;i<100000;i++)
+  {
+    if( !(watches_mem[i].id) )
+    {
+      int my_watch_id = watch_id++;
+      watches_mem[i].index = i;
+      watches_mem[i].pid = pid;
+      watches_mem[i].id = my_watch_id;
+      watches_mem[i].xoff = xoff;
+      watches_mem[i].yoff = yoff;
+      watches_mem[i].width = width;
+      watches_mem[i].height = height;
+      watches_mem[i].type != 'F';
+
+      pthread_create(&(tid), NULL, &watch_thread, (void*)(&(watches_mem[i].index)));
+      return my_watch_id;
+    }
+  }
+
+}
+
+void print_watches()
+{
+  for(int i=0;i<100000;i++)
+  {
+    if( watches_mem[i].id )
+    {
+      ostringstream temp;
+
+      temp  << watches_mem[i].id << " " << watches_mem[i].xoff << " " << watches_mem[i].yoff << " "
+            << watches_mem[i].width << " " << watches_mem[i].height ;
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+    }
+
+  }
 }
 
 
@@ -424,6 +507,19 @@ void agent( pid_t pid)
       iss >> xoff >> yoff >> width >> height;
       getlocks(xoff,yoff,width,height);
     }
+    else if( command == "WATCH" )
+    {
+      iss >> xoff >> yoff >> width >> height;
+
+      ostringstream temp;
+      temp << create_watch_thread(pid,xoff,yoff,width,height);
+      write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
+
+    }
+    else if( command == "WATCHES" )
+    {
+      print_watches();
+    }
     else if(command == "BYE")
     {
 
@@ -450,7 +546,6 @@ int main(int argc, char **argv)
 
   while((client = accept(sock, 0, 0)) ) if((pid=fork()))
   {
-    cout << pid << endl;
     agent(pid);
   }
 
