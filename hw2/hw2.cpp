@@ -245,9 +245,9 @@ void wait_blocked(double xoff,double yoff,double width,double height, char type,
 
 int lock_it(double xoff,double yoff,double width,double height, char type,pid_t pid, bool try_lock)
 {
-  cout << "lock_it: " << pid << endl;
+
   pthread_mutex_lock(locks_mutex);
-  cout << "mutex_got" <<  pid  << endl;
+
   for(int i=0;i<100000;i++)
   {
     if(locks_mem[i].id && (type == 'W' || locks_mem[i].type=='W' )&& intersects(locks_mem[i],xoff,yoff,width,height) )
@@ -265,7 +265,7 @@ int lock_it(double xoff,double yoff,double width,double height, char type,pid_t 
 
     }
   }
-  cout << "will_be_locked_it: " << pid << endl;
+
   for(int i=0;i<100000;i++)
   {
     if( !(locks_mem[i].id) )
@@ -299,7 +299,7 @@ int lock_it(double xoff,double yoff,double width,double height, char type,pid_t 
       break;
     }
   }
-  cout << "locked_it: " << pid << endl;
+
   pthread_mutex_unlock(locks_mutex);
 
   return lock_id-1;
@@ -312,7 +312,6 @@ bool unlock_it(int id,pid_t pid)
   {
     if( locks_mem[i].id == id && locks_mem[i].pid == pid )
     {
-      cout << i << " " << pid <<  endl;
       locks_mem[i].id = 0;
 
       for(int j=0;j<100000;j++)
@@ -331,7 +330,7 @@ bool unlock_it(int id,pid_t pid)
       for(int j=0;j<100000;j++)
       {
         pthread_mutex_lock(&(watches_mem[j].mutex));
-        if( intersects( locks_mem[i], watches_mem[j].xoff,watches_mem[j].yoff,watches_mem[j].width,watches_mem[j].height ) )
+        if(watches_mem[j].id && intersects( locks_mem[i], watches_mem[j].xoff,watches_mem[j].yoff,watches_mem[j].width,watches_mem[j].height ) )
         {
 
           watches_mem[j].type = 'U';
@@ -346,6 +345,7 @@ bool unlock_it(int id,pid_t pid)
         pthread_mutex_unlock(&(watches_mem[j].mutex));
 
       }
+
       return true;
     }
   }
@@ -392,7 +392,7 @@ void *watch_thread(void *params)
   while(1)
   {
     pthread_cond_wait(&(watches_mem[my_watch_id].cond),&(watches_mem[my_watch_id].mutex));
-    cout << "slm nbr" << endl;
+
     if( watches_mem[my_watch_id].type == 'D' )
     {
       watches_mem[my_watch_id].id = 0;
@@ -457,12 +457,12 @@ void print_watches(pid_t pid)
   }
 }
 
-bool unwatch_it(int id)
+bool unwatch_it(int id, pid_t pid)
 {
   for(int i=0;i<100000;i++)
   {
     pthread_mutex_lock(&(watches_mem[i].mutex));
-    if( watches_mem[i].id == id )
+    if(  watches_mem[i].pid == pid &&  watches_mem[i].id == id )
     {
       watches_mem[i].type = 'D';
       pthread_cond_signal(&(watches_mem[i].cond));
@@ -578,7 +578,7 @@ void agent( pid_t pid)
     {
       iss >> id;
       string resp;
-      if(unwatch_it(id))
+      if(unwatch_it(id,pid))
       {
         resp = "Ok";
       }
@@ -597,10 +597,19 @@ void agent( pid_t pid)
     }
     else if(command == "BYE")
     {
+      for(int i=1;i<=lock_id;i++)
+      {
+        unlock_it(i,pid);
+      }
+      for(int i=1;i<=watch_id;i++)
+      {
+        unwatch_it(i,pid);
+      }
 
       close(client);
       exit(0);
     }
+    buf[0]  =0 ;
 
   }
 }
