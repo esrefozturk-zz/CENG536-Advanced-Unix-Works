@@ -353,7 +353,12 @@ void *watch_thread(void *params)
   {
     pthread_cond_wait(&(watches_mem[my_watch_id].cond),&(watches_mem[my_watch_id].mutex));
 
-    if( watches_mem[my_watch_id].type != 'F' )
+    if( watches_mem[my_watch_id].type == 'D' )
+    {
+      watches_mem[my_watch_id].id = 0;
+      break;
+    }
+    else if( watches_mem[my_watch_id].type != 'F' )
     {
       ostringstream temp;
       temp  << "Watch " << watches_mem[my_watch_id].id << " " << watches_mem[my_watch_id].e_xoff << " " << watches_mem[my_watch_id].e_yoff << " "
@@ -365,11 +370,7 @@ void *watch_thread(void *params)
       write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
       watches_mem[my_watch_id].type = 'F';
     }
-    else if( watches_mem[my_watch_id].type != 'D' )
-    {
-      watches_mem[my_watch_id].id = 0;
-      break;
-    }
+
   }
   pthread_mutex_unlock(&(watches_mem[my_watch_id].mutex));
   return NULL;
@@ -400,11 +401,11 @@ int create_watch_thread(pid_t pid, double xoff, double yoff, double width, doubl
 
 }
 
-void print_watches()
+void print_watches(pid_t pid)
 {
   for(int i=0;i<100000;i++)
   {
-    if( watches_mem[i].id )
+    if( watches_mem[i].pid == pid && watches_mem[i].id )
     {
       ostringstream temp;
 
@@ -414,6 +415,23 @@ void print_watches()
     }
 
   }
+}
+
+bool unwatch_it(int id)
+{
+  for(int i=0;i<100000;i++)
+  {
+    pthread_mutex_lock(&(watches_mem[i].mutex));
+    if( watches_mem[i].id == id )
+    {
+      watches_mem[i].type = 'D';
+      pthread_cond_signal(&(watches_mem[i].cond));
+      pthread_mutex_unlock(&(watches_mem[i].mutex));
+      return true;
+    }
+    pthread_mutex_unlock(&(watches_mem[i].mutex));
+  }
+  return false;
 }
 
 
@@ -516,9 +534,26 @@ void agent( pid_t pid)
       write(client,(temp.str()+'\n').c_str(),(temp.str()+'\n').size());
 
     }
+    else if( command == "UNWATCH" )
+    {
+      iss >> id;
+      string resp;
+      if(unwatch_it(id))
+      {
+        resp = "Ok";
+      }
+      else
+      {
+        resp = "Failed";
+      }
+      write(client,(resp+'\n').c_str(),(resp+'\n').size());
+
+
+    }
     else if( command == "WATCHES" )
     {
-      print_watches();
+
+      print_watches(pid);
     }
     else if(command == "BYE")
     {
