@@ -3,3 +3,4 @@ cp maplock536.h /usr/src/linux-source-3.16/ipc/
 cd /usr/src/linux-source-3.16/
 make
 make install
+reboot

@@ -6,6 +6,5 @@
 #define SYS_MAP_UNLOCK 318
 
 int main() {
-	syscall(SYS_MAP_LOCK, 0,0,0,0,0);
-	syscall(SYS_MAP_UNLOCK, 0);
+	printf("%d\n",syscall(SYS_MAP_LOCK, 0,0,0,0,0));
 }
