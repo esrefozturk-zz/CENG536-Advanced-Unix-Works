@@ -7,7 +7,7 @@
 
 
 
-
+/*
 long current_lock_id=1;
 long current_block_id=1;
 
@@ -110,32 +110,87 @@ int insert_lock(unsigned long  xlt, unsigned long  ylt,unsigned long  xrb,unsign
 	}
 	mutex_unlock(locks_mutex);
 }
+*/
 
+#define N 100002
+#define UL unsigned long
 
+static DEFINE_MUTEX(locks_mutex);
 
+static int current_lock_id=1;
 
-SYSCALL_DEFINE5(map_lock , unsigned long, xlt , unsigned long, ylt , 
-		unsigned long , xrb , unsigned long, yrb , short, flags) { 
-	
-	return insert_lock(xlt,ylt,xrb,yrb,flags);
+typedef struct asd{
+	long id;
+	UL xlt;
+	UL ylt;
+	UL xrb;
+	UL yrb;
+	short flags;
+} lock;
+
+typedef struct qwe{
+	UL xlt;
+	UL ylt;
+        UL xrb;
+        UL yrb;
+	struct semaphore sem;
+} block;
+
+static lock locks[N];
+static block blocks[N];
+
+int intersects( lock l, UL xlt, UL ylt, UL xrb, UL yrb)
+{
+	return 1;
 }
 
-SYSCALL_DEFINE1(map_unlock , int, lockid ) {
-	int i;
-	
-	mutex_lock(locks_mutex);
+int insert_block(UL xlt, UL ylt, UL xrb, UL yrb)
+{
+	return 1;
+}
 
-	for(i=0;i<current_lock_id;i++)
+int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
+{
+	int lock_id=0;
+	int i=0;
+	short flag=0;	
+	int bindex;
+
+	while(!flag)
 	{
-		if(lockid==locks[i].id)
+		mutex_lock(&locks_mutex);
+		for(i=0;i<N;i++)
 		{
-			up_write(&(locks[i].sem));
-			break;		
+			if( locks[i].id && intersects(locks[i],xrb,yrb,xlt,ylt) )
+			{
+				bindex=insert_block(xrb,yrb,xlt,ylt);
+				down(&(blocks[bindex].sem));
+				
+			}
+		}
+		if(i==N)
+		{
+			flag=1;
 		}
 	}
 
-	mutex_unlock(locks_mutex);
+	
 
-	return 0;
+	
+	return lock_id;
+}
+
+int my_map_unlock(int lockid)
+{
+	return 0;	
+}
+
+SYSCALL_DEFINE5(map_lock , unsigned long, xlt , unsigned long, ylt , 
+		unsigned long , xrb , unsigned long, yrb , short, flags) { 
+	return my_map_lock(xlt, ylt, xrb, yrb, flags);
+}
+
+SYSCALL_DEFINE1(map_unlock , int, lockid ) {
+	return my_map_unlock(lockid);
 }
 
