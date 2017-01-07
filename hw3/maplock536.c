@@ -7,115 +7,12 @@
 
 
 
-/*
-long current_lock_id=1;
-long current_block_id=1;
-
-typedef struct asd{
-	long id;
-	unsigned long xlt;
-	unsigned long ylt;
-	unsigned long xrb;
-	unsigned long yrb;
-	short flag;
-} lock;
-
-typedef struct qwe{
-	long id;
-	unsigned long xlt;
-	unsigned long ylt;
- 	unsigned long xrb;
-	unsigned long yrb;
-	short flag;
-	mutex m;
-} block;
-
-
-lock locks[100000];
-block blocks[100000];
-
-
-static DECLARE_MUTEX(locks_mutex);
-static DECLARE_MUTEX(blocks_mutex);
-
-int intersects(lock l, unsigned long  xlt, unsigned long  ylt,unsigned long  xrb,unsigned long  yrb)
-{
-  return !(   (l.xlt+xrb<xlt)
-          &&  (xlt+xrb<l.xlt)
-          &&  (l.ylt+yrb<ylt)
-          &&  (ylt+yrb<l.ylt));
-}
-
-
-int insert_block(unsigned long  xlt, unsigned long  ylt,unsigned long  xrb,unsigned long  yrb)
-{
-	int i;
-	mutex_lock(blocks_mutex);
-	for(i=0;i<100002;i++)
-	{
-		if( !(blockeds[i].id) )
-		{
-			blockeds[i].id = current_blocked_id++;
-			blockeds[i].xlt = xlt;
-			blockeds[i].ylt = ylt;
-			blockeds[i].xrb = xrb;
-			blockeds[i].yrb = yrb;
-			init_mutex( &( blockeds[i].mutex ) );
-			mutex_lock( &( blockeds[i].mutex ) )
-			break;
-		}
-	}	
-	mutex_unlock(blocks_mutex);
-}
-
-int insert_lock(unsigned long  xlt, unsigned long  ylt,unsigned long  xrb,unsigned long  yrb, short flag)
-{
-	int bindex;
-	int fool = 0;
-	int i;		
-
-	mutex_lock(locks_mutex);
-	for(i=0;i<100000;i++)
-	{
-		if( locks[i].id && intersects(locks[i],xlt,ylt,xrb,yrb) )
-		{
-			if( !fool )
-			{
-				fool = 1;
-				bindex = insert_block(xlt,ylt,xrb,yrb,flag);
-			}
-			mutex_unlock(locks_mutex);
-			mutex_lock(blocks[bindex]);
-			i=0;
-			mutex_lock(locks_mutex);
-			mutex_unlock(blocks[bindex]);		
-		}
-	}
-	if( fool )
-	{
-		delete_block(bindex);
-	}
-	for(i=0;i<100000;i++)
-	{
-		if( !(locks[i].id) )
-		{
-			locks[i].id = locks_current_id++;
-			locks[i].xlt=xlt;
-                        locks[i].ylt=ylt;
-                        locks[i].xrb=xrb;
-                        locks[i].yrb=yrb;			
-			locks[i].flag=flag;
-			break;
-		}
-	}
-	mutex_unlock(locks_mutex);
-}
-*/
 
 #define N 100002
 #define UL unsigned long
 
 static DEFINE_MUTEX(locks_mutex);
+static DEFINE_MUTEX(blocks_mutex);
 
 static int current_lock_id=1;
 
@@ -129,6 +26,7 @@ typedef struct asd{
 } lock;
 
 typedef struct qwe{
+	short exists;
 	UL xlt;
 	UL ylt;
         UL xrb;
@@ -139,14 +37,52 @@ typedef struct qwe{
 static lock locks[N];
 static block blocks[N];
 
-int intersects( lock l, UL xlt, UL ylt, UL xrb, UL yrb)
+int intersection(UL xlt1, UL ylt1, UL xrb1, UL yrb1, UL xlt2, UL ylt2, UL xrb2, UL yrb2)
 {
-	return 1;
+	return 1;	
+}
+
+
+int lock_intersection( lock l, UL xlt, UL ylt, UL xrb, UL yrb)
+{
+	return intersection(l.xlt,l.ylt,l.xrb,l.yrb,xlt,ylt,xrb,yrb);
+}
+
+int block_intersection(block b,UL xlt, UL ylt, UL xrb, UL yrb)
+{
+	return intersection(b.xlt,b.ylt,b.xrb,b.yrb,xlt,ylt,xrb,yrb);
 }
 
 int insert_block(UL xlt, UL ylt, UL xrb, UL yrb)
 {
-	return 1;
+	int i;
+
+        mutex_lock(&blocks_mutex);
+
+	for(i=0;i<N;i++)
+	{
+		if(!(blocks[i].exists))
+		{
+			break;
+		}
+	}        
+	blocks[i].exists = 1;
+	blocks[i].xlt = xlt;
+	blocks[i].ylt = ylt;
+	blocks[i].xrb = xrb;
+	blocks[i].yrb = yrb;
+	sema_init(&(blocks[i].sem),0);        
+
+	mutex_unlock(&blocks_mutex);
+
+	return i;
+}
+
+void delete_block(int bindex)
+{
+	mutex_lock(&blocks_mutex);
+	blocks[bindex].exists = 0;
+	mutex_unlock(&blocks_mutex);
 }
 
 int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
@@ -161,11 +97,13 @@ int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
 		mutex_lock(&locks_mutex);
 		for(i=0;i<N;i++)
 		{
-			if( locks[i].id && intersects(locks[i],xrb,yrb,xlt,ylt) )
+			if( locks[i].id && lock_intersection(locks[i],xrb,yrb,xlt,ylt) )
 			{
 				bindex=insert_block(xrb,yrb,xlt,ylt);
+				mutex_unlock(&locks_mutex);
 				down(&(blocks[bindex].sem));
-				
+				delete_block(bindex);
+				break;		
 			}
 		}
 		if(i==N)
@@ -173,16 +111,62 @@ int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
 			flag=1;
 		}
 	}
+	for(i=0;i<N;i++)
+	{
+		if(!(locks[i].id))
+		{
+			break;
+		}
+	}
+	locks[i].id = current_lock_id++;
+	locks[i].xrb = xrb;
+	locks[i].yrb = yrb;
+	locks[i].xlt = xlt;
+	locks[i].ylt = ylt;
+	locks[i].flags = flags;
+	lock_id = locks[i].id;
 
-	
-
-	
+	mutex_unlock(&locks_mutex);
 	return lock_id;
 }
 
 int my_map_unlock(int lockid)
 {
-	return 0;	
+	int i;
+	int xrb,yrb,xlt,ylt;
+
+	mutex_lock(&locks_mutex);
+        for(i=0;i<N;i++)
+        {
+                if(locks[i].id==lockid)
+                {
+                        break;
+                }
+        }
+	if(i==N)
+	{
+		mutex_unlock(&locks_mutex);
+		return -1;
+	}
+	xrb = locks[i].xrb;
+	yrb = locks[i].yrb;
+	xlt = locks[i].xlt;
+	ylt = locks[i].ylt;
+	locks[i].id = 0;
+	mutex_unlock(&locks_mutex);
+	
+	mutex_lock(&(blocks_mutex));
+
+	for(i=0;i<N;i++)
+	{
+		if( blocks[i].exists && block_intersection(blocks[i],xrb,yrb,xlt,ylt) )
+		{
+			up(&(blocks[i].sem));
+		}
+	}
+
+	mutex_unlock(&(blocks_mutex));
+	return 0;
 }
 
 SYSCALL_DEFINE5(map_lock , unsigned long, xlt , unsigned long, ylt , 
