@@ -54,9 +54,27 @@ core_initcall(yourfunction);
 
 int intersection(UL xlt1, UL ylt1, UL xrb1, UL yrb1, UL xlt2, UL ylt2, UL xrb2, UL yrb2)
 {
-	return 1;	
-}
+	return 1;
+	
+/*
+int xoff1 = xlt1;
+	int yoff1 = yrb1;
+	int width1 = xrb1 - xlt1;
+	int height1 = ylt1 - yrb1;
+	int xoff2 = xlt2;
+	int yoff2 = yrb2;
+	int width2 = xrb2 - xlt2;
+	int height2 = ylt2 - yrb2;
 
+
+
+	return !(   (l.xoff+width<xoff)
+		&&  (xoff+width<l.xoff)
+          	&&  (l.yoff+height<yoff)
+          	&&  (yoff+height<l.yoff));
+
+*/
+}
 
 int lock_intersection( lock l, UL xlt, UL ylt, UL xrb, UL yrb)
 {
@@ -112,9 +130,10 @@ int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
 		mutex_lock(&locks_mutex);
 		for(i=0;i<N;i++)
 		{
-			if( locks[i].id!=-1 && lock_intersection(locks[i],xrb,yrb,xlt,ylt) )
+			if( locks[i].id!=-1 && lock_intersection(locks[i],xlt,ylt,xrb,yrb)
+			&& ( (locks[i].flags & MAP_WRLOCK) ||  (flags & MAP_WRLOCK)  )  )
 			{
-				bindex=insert_block(xrb,yrb,xlt,ylt);
+				bindex=insert_block(xlt,ylt,xrb,yrb);
 				mutex_unlock(&locks_mutex);
 				down(&(blocks[bindex].sem));
 				delete_block(bindex);
@@ -174,7 +193,7 @@ int my_map_unlock(int lockid)
 
 	for(i=0;i<N;i++)
 	{
-		if( blocks[i].exists != -1 && block_intersection(blocks[i],xrb,yrb,xlt,ylt) )
+		if( blocks[i].exists != -1 && block_intersection(blocks[i],xlt,ylt,xrb,yrb) )
 		{
 			up(&(blocks[i].sem));
 		}
@@ -184,8 +203,7 @@ int my_map_unlock(int lockid)
 	return 0;
 }
 
-SYSCALL_DEFINE5(map_lock , unsigned long, xlt , unsigned long, ylt , 
-		unsigned long , xrb , unsigned long, yrb , short, flags) { 
+SYSCALL_DEFINE5(map_lock , UL, xlt, UL, ylt, UL, xrb, UL, yrb, short, flags) { 
 	return my_map_lock(xlt, ylt, xrb, yrb, flags);
 }
 
