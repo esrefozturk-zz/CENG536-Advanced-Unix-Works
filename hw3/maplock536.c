@@ -37,6 +37,21 @@ typedef struct qwe{
 static lock locks[N];
 static block blocks[N];
 
+
+int __init yourfunction(void)
+{
+	int i;
+	for(i=0;i<N;i++)
+	{
+		locks[i].id = -1;
+		blocks[i].exists = -1;
+	}
+	return 0;
+}
+
+core_initcall(yourfunction);
+
+
 int intersection(UL xlt1, UL ylt1, UL xrb1, UL yrb1, UL xlt2, UL ylt2, UL xrb2, UL yrb2)
 {
 	return 1;	
@@ -61,7 +76,7 @@ int insert_block(UL xlt, UL ylt, UL xrb, UL yrb)
 
 	for(i=0;i<N;i++)
 	{
-		if(!(blocks[i].exists))
+		if(blocks[i].exists == -1)
 		{
 			break;
 		}
@@ -81,7 +96,7 @@ int insert_block(UL xlt, UL ylt, UL xrb, UL yrb)
 void delete_block(int bindex)
 {
 	mutex_lock(&blocks_mutex);
-	blocks[bindex].exists = 0;
+	blocks[bindex].exists = -1;
 	mutex_unlock(&blocks_mutex);
 }
 
@@ -97,7 +112,7 @@ int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
 		mutex_lock(&locks_mutex);
 		for(i=0;i<N;i++)
 		{
-			if( locks[i].id && lock_intersection(locks[i],xrb,yrb,xlt,ylt) )
+			if( locks[i].id!=-1 && lock_intersection(locks[i],xrb,yrb,xlt,ylt) )
 			{
 				bindex=insert_block(xrb,yrb,xlt,ylt);
 				mutex_unlock(&locks_mutex);
@@ -113,7 +128,7 @@ int my_map_lock(UL xlt, UL ylt, UL xrb, UL yrb, short flags)
 	}
 	for(i=0;i<N;i++)
 	{
-		if(!(locks[i].id))
+		if(locks[i].id  == -1)
 		{
 			break;
 		}
@@ -152,14 +167,14 @@ int my_map_unlock(int lockid)
 	yrb = locks[i].yrb;
 	xlt = locks[i].xlt;
 	ylt = locks[i].ylt;
-	locks[i].id = 0;
+	locks[i].id = -1;
 	mutex_unlock(&locks_mutex);
 	
 	mutex_lock(&(blocks_mutex));
 
 	for(i=0;i<N;i++)
 	{
-		if( blocks[i].exists && block_intersection(blocks[i],xrb,yrb,xlt,ylt) )
+		if( blocks[i].exists != -1 && block_intersection(blocks[i],xrb,yrb,xlt,ylt) )
 		{
 			up(&(blocks[i].sem));
 		}
