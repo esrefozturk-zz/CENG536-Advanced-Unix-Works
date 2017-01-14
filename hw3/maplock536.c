@@ -54,13 +54,7 @@ core_initcall(yourfunction);
 
 int intersection(UL xlt1, UL ylt1, UL xrb1, UL yrb1, UL xlt2, UL ylt2, UL xrb2, UL yrb2)
 {
-	if( xrb1 < xlt2 )
-		return 0;
-	if( xrb2 < xlt1 )
-		return 0;
-	if( ylt1 < yrb2 )
-		return 0;
-	if( ylt2 < yrb1 )
+	if( (xrb1 < xlt2) && (xrb2 < xlt1) && (ylt1 < yrb2) && (ylt2 < yrb1)   )
 		return 0;
 	return 1;
 }
