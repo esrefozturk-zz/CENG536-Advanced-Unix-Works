@@ -54,26 +54,15 @@ core_initcall(yourfunction);
 
 int intersection(UL xlt1, UL ylt1, UL xrb1, UL yrb1, UL xlt2, UL ylt2, UL xrb2, UL yrb2)
 {
+	if( xrb1 < xlt2 )
+		return 0;
+	if( xrb2 < xlt1 )
+		return 0;
+	if( ylt1 < yrb2 )
+		return 0;
+	if( ylt2 < yrb1 )
+		return 0;
 	return 1;
-	
-/*
-int xoff1 = xlt1;
-	int yoff1 = yrb1;
-	int width1 = xrb1 - xlt1;
-	int height1 = ylt1 - yrb1;
-	int xoff2 = xlt2;
-	int yoff2 = yrb2;
-	int width2 = xrb2 - xlt2;
-	int height2 = ylt2 - yrb2;
-
-
-
-	return !(   (l.xoff+width<xoff)
-		&&  (xoff+width<l.xoff)
-          	&&  (l.yoff+height<yoff)
-          	&&  (yoff+height<l.yoff));
-
-*/
 }
 
 int lock_intersection( lock l, UL xlt, UL ylt, UL xrb, UL yrb)
